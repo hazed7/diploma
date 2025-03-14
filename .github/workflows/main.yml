@@ -1,0 +1,44 @@
+name: CI/CD Pipeline
+
+on:
+  push:
+    branches: [ main, master ]
+    paths-ignore:
+      - '**.md'
+      - '.github/**/*.md'
+      - 'docs/**'
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+    - uses: actions/checkout@v4
+      with:
+        fetch-depth: 1
+
+    - uses: ./.github/actions/setup-cache
+      with:
+        node-version: '20'
+        pnpm-version: '10.5'
+        install-deps: 'true'
+
+    - name: Check if lint script exists
+      id: check-lint
+      run: |
+        if grep -q "\"lint\":" package.json; then
+          echo "exists=true" >> $GITHUB_OUTPUT
+        else
+          echo "exists=false" >> $GITHUB_OUTPUT
+        fi
+
+    - name: Lint
+      if: steps.check-lint.outputs.exists == 'true'
+      run: pnpm lint
+
+    - name: Build
+      run: pnpm build
