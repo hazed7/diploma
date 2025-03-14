@@ -1,0 +1,39 @@
+# ---- build stage ----
+FROM node:18-alpine AS build
+
+RUN corepack enable && corepack prepare pnpm@latest --activate
+
+WORKDIR /usr/src/app
+
+COPY pnpm-lock.yaml package.json ./
+
+RUN pnpm install --frozen-lockfile
+
+COPY . .
+
+RUN pnpm run build
+
+RUN pnpm prune --prod
+
+# ---- prod stage ----
+FROM node:18-alpine AS production
+
+ENV NODE_ENV=production
+
+WORKDIR /usr/src/app
+
+RUN mkdir -p logs && chown -R node:node ./logs
+
+COPY --from=build /usr/src/app/package.json ./
+COPY --from=build /usr/src/app/pnpm-lock.yaml ./
+
+COPY --from=build /usr/src/app/node_modules ./node_modules
+COPY --from=build /usr/src/app/dist ./dist
+
+COPY --from=build /usr/src/app/.env* ./
+
+USER node
+
+EXPOSE 3000
+
+CMD ["node", "dist/main"]
